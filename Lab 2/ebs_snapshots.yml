@@ -1,0 +1,137 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'AHEAD Innovation Days: Lambda functions for EBS Snapshots - Lab 2'
+
+Resources:
+
+  LambdaEBSSnapshotRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: /
+      Policies:
+      - PolicyName: EBSSnapshotPolicy
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:*
+            Resource: arn:aws:logs:*:*:*
+          - Effect: Allow
+            Action: ec2:Describe*
+            Resource: '*'
+          - Effect: Allow
+            Action:
+            - ec2:CreateSnapshot
+            - ec2:DeleteSnapshot
+            - ec2:CreateTags
+            - ec2:ModifySnapshotAttribute
+            - ec2:ResetSnapshotAttribute
+            Resource:
+              - '*'
+
+  EBSSnapshot:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          import boto3
+          import collections
+          import datetime
+          import logging
+          logging.basicConfig(format='%(levelname)s:%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p',level=logging.INFO)
+          logger = logging.getLogger()
+          #Set level here, not in basic config, because AWS ignores it. Do it explicitly
+          logger.setLevel(logging.INFO)
+          ec = boto3.client('ec2')
+          def lambda_handler(event, context):
+              reservations = ec.describe_instances(Filters=[{'Name': 'tag-key',
+                      'Values': ['backup', 'Backup']}]).get('Reservations', [])
+              instances = sum([[i for i in r['Instances']] for r in
+                              reservations], [])
+              logger.info('Found %d instances participating in automted backup', len(instances))
+              snaps_to_tag = collections.defaultdict(list)
+              for instance in instances:
+                  try:
+                      retention_days = [int(t.get('Value')) for t in
+                                        instance['Tags'] if t['Key']
+                                        == 'Retention'][0]
+                  except IndexError:
+                      retention_days = 7
+                  for device in instance['BlockDeviceMappings']:
+                      if device.get('Ebs', None) is None:
+                          continue
+                      vol_id = device['Ebs']['VolumeId']
+                      logger.info('Found EBS volume %s on instance %s',  vol_id, instance['InstanceId'])
+                      snap = ec.create_snapshot(VolumeId=vol_id)
+                      snaps_to_tag[retention_days].append(snap['SnapshotId'])
+                      logger.info('Retaining snapshot %s of volume %s from instance %s for %d days', snap['SnapshotId'], vol_id, instance['InstanceId'], retention_days)
+              for retention_days in snaps_to_tag.keys():
+                  delete_date = datetime.date.today() \
+                      + datetime.timedelta(days=retention_days)
+                  delete_fmt = delete_date.strftime('%Y-%m-%d')
+                  logger.info('Will delete %d snapshots on %s', len(snaps_to_tag[retention_days]), delete_fmt)
+                  ec.create_tags(Resources=snaps_to_tag[retention_days],
+          Tags=[{'Key': 'DeleteOn', 'Value': delete_fmt}])
+      Description: "Function used to create EBS snapshots for instances based upon the existence a <Backup> tag"
+      Handler: "index.lambda_handler"
+      Role: !GetAtt LambdaEBSSnapshotRole.Arn
+      Runtime: python2.7
+      FunctionName: "EBS-Snapshot-Create-Function"
+
+  EBSSnapshotDelete:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          import boto3
+          import re
+          import datetime
+          import logging
+
+          #Set up a logger
+          logging.basicConfig(format='%(levelname)s:%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p',level=logging.INFO)
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          ec = boto3.client('ec2')
+          iam = boto3.client('iam')
+          sts = boto3.client('sts')
+
+          """
+          This function looks at *all* snapshots that have a "DeleteOn" tag containing
+          the current day formatted as YYYY-MM-DD. This function should be run at least
+          daily.
+          """
+
+          def lambda_handler(event, context):
+              account_ids = list()
+              account_id = sts.get_caller_identity().get('Account')
+              account_ids.append(account_id)
+
+              logger.info('Found account id %s from the runtime environment', account_id)
+
+
+
+              delete_on = datetime.date.today().strftime('%Y-%m-%d')
+              filters = [
+                  {'Name': 'tag-key', 'Values': ['DeleteOn']},
+                  {'Name': 'tag-value', 'Values': [delete_on]},
+              ]
+              snapshot_response = ec.describe_snapshots(OwnerIds=account_ids, Filters=filters)
+
+
+              for snap in snapshot_response['Snapshots']:
+                  logger.info('Deleting snapshot %s from S3 permanently', snap['SnapshotId'])
+                  ec.delete_snapshot(SnapshotId=snap['SnapshotId'])
+      Description: "Function used to delete EBS snapshots based upon the <DeleteOn> tag"
+      Handler: "index.lambda_handler"
+      Role: !GetAtt LambdaEBSSnapshotRole.Arn
+      Runtime: python2.7
+      FunctionName: "EBS-Snapshot-Delete-Function"

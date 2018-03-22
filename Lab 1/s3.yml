@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'AHEAD Innovation Days: S3 Storage Components'
+
+Parameters:
+  UserName:
+    Type: String
+    Description: "Enter your first & last name to be appended for the creation of an S3 bucket (e.g., johnsmith)"
+
+Resources:
+
+  UserBucket:
+    Type: AWS::S3::Bucket
+    Description: "S3 Bucket for testing Config Rules"
+    Properties:
+      BucketName: !Join ["-", [!Ref UserName, "test-bucket", !Ref "AWS::Region"]]
+      Tags:
+      - Key: "Environment"
+        Value: "AHEAD Innovation Days"
+      - Key: "Purpose"
+        Value: "Lab 4 - Config Rules"
+      - Key: "Data_Classification"
+        Value: "Private"
+
+  ConfigBucket:
+    Type: AWS::S3::Bucket
+    Description: "S3 Bucket for Config logging"
+    Properties:
+      BucketName: !Join ["-", [!Ref UserName, "config-bucket", !Ref "AWS::Region"]]
+      Tags:
+      - Key: "Environment"
+        Value: "AHEAD Innovation Days"
+      - Key: "Purpose"
+        Value: "Lab 4 - Config Rules"
+Outputs:
+
+  UserBucketName:
+    Value: !Ref UserBucket
+  ConfigBucketName:
+    Value: !Ref ConfigBucket

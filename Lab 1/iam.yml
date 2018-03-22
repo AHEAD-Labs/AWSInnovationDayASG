@@ -1,0 +1,98 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'AHEAD Innovation Days: IAM Requirements for Labs'
+
+Parameters:
+  ConfigBucketName:
+    Type: String
+
+Resources:
+
+  MaintenanceWindowRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+                - "ssm.amazonaws.com"
+                - "sns.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AmazonSSMMaintenanceWindowRole"
+      RoleName: "MaintenanceWindowRole"
+
+  ConfigRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "config.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
+      RoleName: "ConfigRole"
+      Policies:
+        -
+          PolicyName: "ConfigPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action:
+                  - "config:Put*"
+                Resource: "*"
+              -
+                Effect: "Allow"
+                Action:
+                  - "s3:PutObject*"
+                Resource: !Join ["", ["arn:aws:s3:::", !Ref 'ConfigBucketName', "/*"]]
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      RoleName: "LambdaExecutionRole"
+      Policies:
+        -
+          PolicyName: "root"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "arn:aws:logs:*:*:*"
+              -
+                Effect: "Allow"
+                Action: "s3:*"
+                Resource: "*"
+
+Outputs:
+  ConfigRole:
+    Value: !GetAtt ConfigRole.Arn
+  LambdaExecutionRole:
+    Value: !GetAtt LambdaExecutionRole.Arn

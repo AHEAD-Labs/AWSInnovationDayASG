@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'AHEAD Innovation Days: VPC Configuration'
+
+Parameters:
+
+  PrivateRouteTableAZ1:
+    Type: String
+  PrivateRouteTableAZ2:
+    Type: String
+  PublicRouteTable:
+    Type: String
+  PublicSubnetAZ1:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Public Subnet for NAT Gateway 1"
+  PublicSubnetAZ2:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Public Subnet for NAT Gateway 2"
+  VpcId:
+    Type: String
+    Description: "VPC ID to associate with IGW & NAT Gateways"
+
+
+Resources:
+
+  PublicSubnetRoute:
+    DependsOn: InternetGatewayVPCGatewayAttachment
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        !Ref InternetGateway
+
+  PrivateSubnetRouteAZ1:
+    DependsOn: NATGatewayAZ1
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        !Ref PrivateRouteTableAZ1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        !Ref NATGatewayAZ1
+  PrivateSubnetRouteAZ2:
+    DependsOn: NATGatewayAZ2
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        !Ref PrivateRouteTableAZ2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        !Ref NATGatewayAZ2
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: WorkSpaces Quickstart
+  InternetGatewayVPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VpcId
+
+  NatGatewayEIPAZ1:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: !Ref VpcId
+  NATGatewayAZ1:
+    DependsOn: NatGatewayEIPAZ1
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        !GetAtt NatGatewayEIPAZ1.AllocationId
+      SubnetId:
+        !Ref PublicSubnetAZ1
+
+  NatGatewayEIPAZ2:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: !Ref VpcId
+  NATGatewayAZ2:
+    DependsOn: NatGatewayEIPAZ2
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        !GetAtt NatGatewayEIPAZ2.AllocationId
+      SubnetId:
+        !Ref PublicSubnetAZ2

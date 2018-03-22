@@ -1,0 +1,141 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'AHEAD Innovation Days: Subnets & Route Tables'
+
+Parameters:
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Default: ''
+    Description: VPC resource ID.
+  PublicSubnetCIDRAZ1:
+    Type: String
+    Description: "CIDR Block for Public Subnet AZ 1"
+  PublicSubnetCIDRAZ2:
+    Type: String
+    Description: "CIDR Block for Public Subnet AZ 2"
+  PrivateSubnetCIDRAZ1:
+    Type: String
+    Description: "CIDR Block for Private Subnet AZ 1"
+  PrivateSubnetCIDRAZ2:
+    Type: String
+    Description: "CIDR Block for Private Subnet AZ 2"
+
+Resources:
+#Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VpcId
+      Tags:
+      - Key: Name
+        Value: "PublicRouteTable"
+  PrivateRouteTableAZ1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VpcId
+      Tags:
+      - Key: Name
+        Value: "PrivateRouteTableAZ1"
+  PrivateRouteTableAZ2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VpcId
+      Tags:
+      - Key: Name
+        Value: "PrivateRouteTableAZ2"
+#Subnets
+  PublicSubnetAZ1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - '0'
+        - Fn::GetAZs: !Ref AWS::Region
+      CidrBlock: !Ref PublicSubnetCIDRAZ1
+      MapPublicIpOnLaunch: 'false'
+      Tags:
+      - Key: Name
+        Value: PublicSubnetAZ1
+      VpcId: !Ref VpcId
+  PublicSubnetAZ1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetAZ1
+
+  PublicSubnetAZ2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - '1'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      CidrBlock: !Ref PublicSubnetCIDRAZ2
+      MapPublicIpOnLaunch: 'false'
+      Tags:
+      - Key: Name
+        Value: PublicSubnetAZ2
+      VpcId: !Ref VpcId
+  PublicSubnetAZ2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetAZ2
+
+  PrivateSubnetAZ1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - '0'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      CidrBlock: !Ref PrivateSubnetCIDRAZ1
+      MapPublicIpOnLaunch: 'false'
+      Tags:
+      - Key: Name
+        Value: PrivateSubnetAZ1
+      VpcId: !Ref VpcId
+  PrivateSubnetAZ1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableAZ1
+      SubnetId: !Ref PrivateSubnetAZ1
+
+  PrivateSubnetAZ2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - '1'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      CidrBlock: !Ref PrivateSubnetCIDRAZ2
+      MapPublicIpOnLaunch: 'false'
+      Tags:
+      - Key: Name
+        Value: PrivateSubnetAZ2
+      VpcId: !Ref VpcId
+  PrivateSubnetAZ2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableAZ2
+      SubnetId: !Ref PrivateSubnetAZ2
+
+Outputs:
+
+  PrivateRouteTableAZ1:
+    Value: !Ref PrivateRouteTableAZ1
+  PrivateRouteTableAZ2:
+    Value: !Ref PrivateRouteTableAZ2
+  PublicRouteTable:
+    Value: !Ref PublicRouteTable
+  PublicSubnetAZ1:
+    Value: !Ref PublicSubnetAZ1
+  PublicSubnetAZ2:
+    Value: !Ref PublicSubnetAZ2
+  PrivateSubnetAZ1:
+    Value: !Ref PrivateSubnetAZ1
+  PrivateSubnetAZ2:
+    Value: !Ref PrivateSubnetAZ2

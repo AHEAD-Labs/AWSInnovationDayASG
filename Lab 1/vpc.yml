@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'AHEAD Innovation Days: VPC Creation'
+
+Parameters:
+
+  VPCCIDRBlock:
+    Type: String
+    Description: "CIDR Block for the VPC"
+
+Resources:
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCIDRBlock
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      InstanceTenancy: default
+      Tags:
+      - Key: Name
+        Value: VPC for AHEAD Innovation Days
+
+Outputs:
+
+  VpcId:
+    Value: !Ref VPC

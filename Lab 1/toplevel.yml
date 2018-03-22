@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'AHEAD Innovation Days: Top level Stack - Lab 1'
+
+Metadata:
+
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: "AHEAD Innovation Day"
+        Parameters:
+          - EC2KeyPair
+          - UserName
+          - ConfigInUse
+
+
+    ParameterLabels:
+      EC2KeyPair:
+        default: "Choose your EC2 key pair"
+      UserName:
+        default: "What is your name?"
+      ConfigInUse:
+        default: Is AWS Config setup in your account?
+
+
+Parameters:
+#Key pairs cannot be created in CloudFormation
+  EC2KeyPair:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: "Select the key pair created in the previous steps"
+  UserName:
+    Type: String
+    Description: "Enter your first & last name to be appended for the creation of an S3 bucket (e.g., johnsmith)"
+  ConfigInUse:
+    Type: String
+    Description: "Select true or false"
+    AllowedValues:
+      - True
+      - False
+
+Mappings:
+  CIDRBlocks:
+    VPC:
+      CIDR: "10.0.0.0/16"
+    PublicSubnetAZ1:
+      CIDR: "10.0.10.0/24"
+    PublicSubnetAZ2:
+      CIDR: "10.0.12.0/24"
+    PrivateSubnetAZ1:
+      CIDR: "10.0.0.0/24"
+    PrivateSubnetAZ2:
+      CIDR: "10.0.1.0/24"
+
+Resources:
+
+  VPC:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: "https://s3.us-east-2.amazonaws.com/ahead-innovation-days/aws201/lab1/vpc.yml"
+      Parameters:
+        VPCCIDRBlock: !FindInMap [CIDRBlocks, VPC, CIDR]
+
+  Subnets:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: "https://s3.us-east-2.amazonaws.com/ahead-innovation-days/aws201/lab1/subnets.yml"
+      Parameters:
+        VpcId: !GetAtt VPC.Outputs.VpcId
+        PublicSubnetCIDRAZ1: !FindInMap [CIDRBlocks, PublicSubnetAZ1, CIDR]
+        PublicSubnetCIDRAZ2: !FindInMap [CIDRBlocks, PublicSubnetAZ2, CIDR]
+        PrivateSubnetCIDRAZ1: !FindInMap [CIDRBlocks, PrivateSubnetAZ1, CIDR]
+        PrivateSubnetCIDRAZ2: !FindInMap [CIDRBlocks, PrivateSubnetAZ2, CIDR]
+
+  VPCComponents:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: "https://s3.us-east-2.amazonaws.com/ahead-innovation-days/aws201/lab1/vpccomponents.yml"
+      Parameters:
+        PublicRouteTable: !GetAtt Subnets.Outputs.PublicRouteTable
+        PrivateRouteTableAZ1: !GetAtt Subnets.Outputs.PrivateRouteTableAZ1
+        PrivateRouteTableAZ2: !GetAtt Subnets.Outputs.PrivateRouteTableAZ2
+        PublicSubnetAZ1: !GetAtt Subnets.Outputs.PublicSubnetAZ1
+        PublicSubnetAZ2: !GetAtt Subnets.Outputs.PublicSubnetAZ2
+        VpcId: !GetAtt VPC.Outputs.VpcId
+
+  IAMComponents:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: "https://s3.us-east-2.amazonaws.com/ahead-innovation-days/aws201/lab1/iam.yml"
+      Parameters:
+        ConfigBucketName: !GetAtt S3Components.Outputs.ConfigBucketName
+
+  S3Components:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: "https://s3.us-east-2.amazonaws.com/ahead-innovation-days/aws201/lab1/s3.yml"
+      Parameters:
+        UserName: !Ref UserName
+
+  Instances:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: "https://s3.us-east-2.amazonaws.com/ahead-innovation-days/aws201/lab1/instances.yml"
+      Parameters:
+          PublicSubnetAZ1: !GetAtt Subnets.Outputs.PublicSubnetAZ1
+          PublicSubnetAZ2: !GetAtt Subnets.Outputs.PublicSubnetAZ2
+          PrivateSubnetAZ1: !GetAtt Subnets.Outputs.PrivateSubnetAZ1
+          PrivateSubnetAZ2: !GetAtt Subnets.Outputs.PrivateSubnetAZ2
+          VpcId: !GetAtt VPC.Outputs.VpcId
+          EC2KeyPair: !Ref EC2KeyPair
+
+  Config:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: "https://s3.us-east-2.amazonaws.com/ahead-innovation-days/aws201/lab1/config.yml"
+      Parameters:
+        UserBucketName: !GetAtt S3Components.Outputs.UserBucketName
+        ConfigBucketName: !GetAtt S3Components.Outputs.ConfigBucketName
+        ConfigInUse: !Ref ConfigInUse
+        ConfigRole: !GetAtt IAMComponents.Outputs.ConfigRole
+        LambdaExecutionRole: !GetAtt IAMComponents.Outputs.LambdaExecutionRole

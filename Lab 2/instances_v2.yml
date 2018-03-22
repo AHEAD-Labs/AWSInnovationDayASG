@@ -1,0 +1,146 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'AHEAD Innovation Days: Deploy Instances used for Labs'
+
+Parameters:
+  PublicSubnetAZ1:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Public Subnet for Instances"
+  PublicSubnetAZ2:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Public Subnet for Instances"
+  PrivateSubnetAZ1:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Private Subnet for Instances"
+  PrivateSubnetAZ2:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Private Subnet for Instances"
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: "VPC ID for Instances"
+  EC2KeyPair:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: "Choose the EC2 Key Pair to associate with EC2 instances"
+
+Mappings:
+
+  WindowsServer:
+    us-east-1:
+      "AMI": "ami-603b1c1a"
+    us-east-2:
+      "AMI": "ami-16370073"
+    us-west-1:
+      "AMI": "ami-e8b6be88"
+    us-west-2:
+      "AMI": "ami-74800e0c"
+
+  PatchServer:
+    us-east-1:
+      "AMI": "ami-013e197b"
+    us-east-2:
+      "AMI": "ami-02446e67"
+    us-west-1:
+      "AMI": "ami-92fefdf2"
+    us-west-2:
+      "AMI": "ami-afe051d7"
+
+Resources:
+  Lab2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allows ports inbound for RDP
+      GroupName: ahead-lab-rdp-access
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '3389'
+        ToPort: '3389'
+        CidrIp: "0.0.0.0/0"
+
+  Lab2Instance:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - Lab2SecurityGroup
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - '0'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      ImageId: !FindInMap [WindowsServer, !Ref "AWS::Region", AMI]
+      InstanceType: t2.large
+      KeyName: !Ref EC2KeyPair
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet:
+            - Ref: Lab2SecurityGroup
+          SubnetId:
+            Ref: PublicSubnetAZ1
+      Tags:
+      - Key: "Name"
+        Value: "Windows Instance - Lab 2"
+      - Key: "Environment"
+        Value: "AHEAD Innovation Days"
+      - Key: "Application"
+        Value: "Windows Server"
+      UserData:
+        'Fn::Base64': !Sub |
+            <powershell>
+            New-Item -ItemType directory -Path C:\AHEAD-Lab-Files
+            Invoke-WebRequest -Uri 'https://s3.us-east-2.amazonaws.com/ahead-innovation-days/aws201/lab2/office.zip' -OutFile 'C:\office.zip'
+            Expand-Archive -path C:\office.zip -Destination C:\AHEAD-Lab-Files
+            Remove-Item –path C:\office.zip –recurse
+            </powershell>
+
+  PatchServer:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - Lab2SecurityGroup
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - '0'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      IamInstanceProfile: !Ref PatchManagementProfile
+      ImageId: !FindInMap [PatchServer, !Ref "AWS::Region", AMI]
+      InstanceType: t2.medium
+      KeyName: !Ref EC2KeyPair
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet:
+            - Ref: Lab2SecurityGroup
+          SubnetId:
+            Ref: PrivateSubnetAZ1
+      Tags:
+      - Key: "Name"
+        Value: "Patch Server - Lab 3"
+      - Key: "Environment"
+        Value: "AHEAD Innovation Days"
+      - Key: "Application"
+        Value: "Windows Server"
+
+  PatchManagementRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM"
+      RoleName: "PatchManagement"
+
+  PatchManagementProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref PatchManagementRole
+      InstanceProfileName: PatchManagement

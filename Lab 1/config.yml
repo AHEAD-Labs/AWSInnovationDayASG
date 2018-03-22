@@ -1,0 +1,127 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'AHEAD Innovation Days: AWS Config Requirements for Lab 4'
+
+
+Parameters:
+
+  ConfigInUse:
+    Type: String
+    Description: "Is AWS Config in use in your account already? Enter true or false"
+  UserBucketName:
+    Type: String
+    Description: "Name of bucket that Config will check permissions"
+  ConfigBucketName:
+    Type: String
+    Description: "Name of bucket to use for Config logs"
+  ConfigRole:
+    Type: String
+    Description: "ARN of Role for Config"
+  LambdaExecutionRole:
+    Type: String
+    Description: "ARN of Role for Lambda Function"
+
+Conditions:
+
+  ConfigNotExist: !Equals [!Ref ConfigInUse, "false"]
+
+Resources:
+
+  AWSConfigRule:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigRecorder
+    Properties:
+      ConfigRuleName: "S3PublicReadConfigRule"
+      Description: "Checks that S3 buckets do not allow Public access"
+      Scope:
+        ComplianceResourceId: !Ref UserBucketName
+        ComplianceResourceTypes:
+          - AWS::S3::Bucket
+      Source:
+        Owner: AWS
+        SourceIdentifier: "S3_BUCKET_PUBLIC_READ_PROHIBITED"
+
+  ConfigDelivery:
+    Type: AWS::Config::DeliveryChannel
+    Condition: ConfigNotExist
+    DependsOn: ConfigTopic
+    Properties:
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: Six_Hours
+      S3BucketName: !Ref ConfigBucketName
+      SnsTopicARN: !Ref ConfigTopic
+
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Condition: ConfigNotExist
+    Properties:
+      Name: "InnovationDays"
+      RecordingGroup:
+        ResourceTypes:
+          - AWS::S3::Bucket
+      RoleARN: !Ref ConfigRole
+
+  ConfigTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "Innovation-Day-Config-Topic"
+      TopicName: "Innovation-Day-Config-Topic"
+
+  SNSTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    DependsOn: ConfigTopic
+    Properties:
+      PolicyDocument:
+        Id: SNSTopicPolicy
+        Version: '2012-10-17'
+        Statement:
+        - Sid: My-statement-id
+          Effect: Allow
+          Principal: "*"
+          Action:
+            - sns:Publish
+            - sns:RemovePermission
+            - sns:SetTopicAttributes
+            - sns:DeleteTopic
+            - sns:ListSubscriptionsByTopic
+            - sns:GetTopicAttributes
+            - sns:Receive
+            - sns:AddPermission
+            - sns:Subscribe
+          Resource: "*"
+      Topics:
+      - !Ref ConfigTopic
+
+  LambdaS3Fix:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          import boto3
+          import logging
+          import json
+          s3 = boto3.resource('s3')
+          client = boto3.client('s3')
+          def lambda_handler(event, context):
+              sns = event['Records'][0]['Sns']
+              json_msg = json.loads(sns['Message'])
+              if json_msg.get('configRuleName'):
+                  ConfigRule = 'S3PublicReadConfigRule'
+                  print(json_msg['resourceType'])
+                  print(json_msg['resourceId'])
+                  print(json_msg['newEvaluationResult']['complianceType'])
+                  S3bucket = json_msg['resourceId']
+                  bucket_tagging = s3.BucketTagging(S3bucket)
+                  data = bucket_tagging.tag_set
+                  for i in data:
+                      for key, value in i.items():
+                          if (value == 'Private'):
+                              response = client.put_bucket_acl(
+                                  ACL='private',
+                                  Bucket=S3bucket
+                              )
+                              print(response)
+      Description: "Function used to force S3 buckets to be private"
+      Handler: "index.lambda_handler"
+      Role: !Ref LambdaExecutionRole
+      Runtime: python3.6
+      FunctionName: "S3-Private-Bucket-Remediation"
