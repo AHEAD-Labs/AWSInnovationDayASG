@@ -10,4 +10,4 @@ Each folder in the repo represents a lab within the workshop. The folder contain
 
 For more information about AHEAD, please visit our website at www.thinkahead.com
 
-* [AHEAD](http://www.thinkahead.com) - Experts in Enterprise Cloud
+[AHEAD](http://www.thinkahead.com) - Experts in Enterprise Cloud
