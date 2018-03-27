@@ -51,6 +51,9 @@ Mappings:
     PrivateSubnetAZ2:
       CIDR: "10.0.1.0/24"
 
+Conditions:
+  ConfigNotExist: !Equals [!Ref ConfigInUse, "true"]
+
 Resources:
 
   VPC:
@@ -112,10 +115,9 @@ Resources:
   Config:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: "https://s3.us-east-2.amazonaws.com/ahead-innovation-days/aws201/lab1/config.yml"
+      TemplateURL: !If [ConfigNotExist, "https://s3.us-east-2.amazonaws.com/ahead-innovation-days/aws201/lab1/config_exists.yml", "https://s3.us-east-2.amazonaws.com/ahead-innovation-days/aws201/lab1/config.yml"]
       Parameters:
         UserBucketName: !GetAtt S3Components.Outputs.UserBucketName
         ConfigBucketName: !GetAtt S3Components.Outputs.ConfigBucketName
-        ConfigInUse: !Ref ConfigInUse
         ConfigRole: !GetAtt IAMComponents.Outputs.ConfigRole
         LambdaExecutionRole: !GetAtt IAMComponents.Outputs.LambdaExecutionRole

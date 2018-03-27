@@ -4,9 +4,6 @@ Description: 'AHEAD Innovation Days: AWS Config Requirements for Lab 4'
 
 Parameters:
 
-  ConfigInUse:
-    Type: String
-    Description: "Is AWS Config in use in your account already? Enter true or false"
   UserBucketName:
     Type: String
     Description: "Name of bucket that Config will check permissions"
@@ -24,7 +21,6 @@ Resources:
 
   AWSConfigRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorder
     Properties:
       ConfigRuleName: "S3PublicReadConfigRule"
       Description: "Checks that S3 buckets do not allow Public access"
@@ -35,24 +31,6 @@ Resources:
       Source:
         Owner: AWS
         SourceIdentifier: "S3_BUCKET_PUBLIC_READ_PROHIBITED"
-
-  ConfigDelivery:
-    Type: AWS::Config::DeliveryChannel
-    DependsOn: ConfigTopic
-    Properties:
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: Six_Hours
-      S3BucketName: !Ref ConfigBucketName
-      SnsTopicARN: !Ref ConfigTopic
-
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      Name: "InnovationDays"
-      RecordingGroup:
-        ResourceTypes:
-          - AWS::S3::Bucket
-      RoleARN: !Ref ConfigRole
 
   ConfigTopic:
     Type: AWS::SNS::Topic
