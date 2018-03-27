@@ -4,9 +4,6 @@ Description: 'AHEAD Innovation Days: AWS Config Requirements for Lab 4'
 
 Parameters:
 
-  ConfigInUse:
-    Type: String
-    Description: "Is AWS Config in use in your account already? Enter true or false"
   UserBucketName:
     Type: String
     Description: "Name of bucket that Config will check permissions"
